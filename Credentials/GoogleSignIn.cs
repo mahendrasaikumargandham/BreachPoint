@@ -492,6 +492,7 @@ public class GoogleSignIn : MonoBehaviour
     public string redirectUri = "http://localhost:8080";
 
     [Header("UI")]
+    public GameObject signInPanel;
     public GameObject displayNamePanel;
     public GameObject mainMenuPanel;
 
@@ -759,6 +760,7 @@ public class GoogleSignIn : MonoBehaviour
             Debug.Log("First-time user detected. Enabling display name screen.");
             if (displayNamePanel != null)
             {
+                signInPanel.SetActive(false);
                 displayNamePanel.SetActive(true);
             }
         }
@@ -773,6 +775,7 @@ public class GoogleSignIn : MonoBehaviour
     {
         if (mainMenuPanel != null)
         {
+            signInPanel.SetActive(false);
             mainMenuPanel.SetActive(true);
         }
         Debug.Log("Proceeding to main menu.");
