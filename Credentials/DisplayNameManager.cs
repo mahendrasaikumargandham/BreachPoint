@@ -19,11 +19,11 @@
 //         string displayName = displayNameInput.text;
 //         if (string.IsNullOrEmpty(displayName))
 //         {
-//             Debug.LogError("Display name cannot be empty.");
+//             Debug.LogError("Username cannot be empty.");
 //             return; // Optionally show UI error message
 //         }
 
-//         Debug.Log($"Submitting display name: {displayName}");
+//         Debug.Log($"Submitting Username: {displayName}");
 
 //         FirebaseUser user = FirebaseAuth.DefaultInstance.CurrentUser;
 //         if (user == null)
@@ -42,7 +42,7 @@
 
 //         Dictionary<string, object> userData = new Dictionary<string, object>
 //         {
-//             { "name", user.DisplayName ?? "" }, // Google's display name (handle null)
+//             { "name", user.DisplayName ?? "" }, // Google's Username (handle null)
 //             { "email", user.Email },
 //             { "uid", user.UserId },
 //             { "displayName", displayName },
@@ -59,7 +59,7 @@
 //         }
 //         else
 //         {
-//             Debug.Log("User data (including display name) stored in Firestore successfully!");
+//             Debug.Log("User data (including Username) stored in Firestore successfully!");
 //             if (displayNamePanel != null)
 //             {
 //                 displayNamePanel.SetActive(false);
@@ -126,8 +126,8 @@ public class DisplayNameManager : MonoBehaviour
         string displayName = displayNameInput.text.Trim(); // Trim whitespace
         if (string.IsNullOrEmpty(displayName))
         {
-            if (feedbackText != null) feedbackText.text = "Display name cannot be empty.";
-            Debug.LogError("Display name cannot be empty.");
+            if (feedbackText != null) feedbackText.text = "Username cannot be empty.";
+            Debug.LogError("Username cannot be empty.");
             return;
         }
 
@@ -183,7 +183,7 @@ public class DisplayNameManager : MonoBehaviour
         if (snapshot.Count > 0)
         {
             // Username is TAKEN
-            Debug.LogWarning("Display name already exists.");
+            Debug.LogWarning("Username already exists.");
             if (feedbackText != null)
             {
                 feedbackText.text = "This name is already taken.";
@@ -219,7 +219,7 @@ public class DisplayNameManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("User data (including display name) stored in Firestore successfully!");
+            Debug.Log("User data (including Username) stored in Firestore successfully!");
             // Switch panels on success
             if (displayNamePanel != null)
             {
