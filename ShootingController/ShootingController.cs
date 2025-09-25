@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using Photon.Pun;
 
 public class ShootingController : MonoBehaviour
@@ -15,6 +16,7 @@ public class ShootingController : MonoBehaviour
     public float fireRange = 100f;
     public float fireDamage = 15f;
     private float nextFireTime = 0f;
+    public Text ammoText;
 
     [Header("Shooting Flags")]
     public bool isShooting;
@@ -47,6 +49,7 @@ public class ShootingController : MonoBehaviour
         playerMovement = GetComponent<PlayerMovement>();
         view = GetComponent<PhotonView>();
         currentAmmo = maxAmmo;
+        ammoText.text = maxAmmo.ToString();
 
         if(view.Owner.CustomProperties.ContainsKey("Team")) {
             int team = (int)view.Owner.CustomProperties["Team"];
@@ -64,6 +67,7 @@ public class ShootingController : MonoBehaviour
             return;
         }
 
+        ammoText.text = currentAmmo.ToString();
         isWalking = playerMovement.isMoving;
         isShootingInput = inputManager.fireInput;
 

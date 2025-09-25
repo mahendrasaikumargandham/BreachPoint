@@ -197,7 +197,7 @@ public class DisplayNameManager : MonoBehaviour
         if (feedbackText != null) feedbackText.text = "Name is available! Saving...";
 
         // DocumentReference docRef = db.Collection("users").Document(user.Email);
-        DocumentReference docRef = db.Collection("users").Document(user.UserId);
+        DocumentReference docRef = db.Collection("users").Document(user.Email);
         Dictionary<string, object> userData = new Dictionary<string, object>
         {
             { "name", user.DisplayName ?? "" },
