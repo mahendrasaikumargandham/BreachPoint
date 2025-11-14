@@ -14,8 +14,7 @@
 Breach Point was engineered to bridge the gap between arcade responsiveness and tactical depth. The project focuses on the technical challenges of multiplayer game development, including **latency compensation**, **state synchronization**, and **optimized rendering pipelines**.
 
 ### 📺 Demo / Gameplay
-*[Insert a GIF or Screenshot of your gameplay here. Ideally showing shooting or the lobby]*
-> *Gameplay footage showcasing the dynamic character controller and TDM mechanics.*
+https://youtu.be/mZx57gI02Jc
 
 ---
 
