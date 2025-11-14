@@ -399,13 +399,18 @@ public class Launcher : MonoBehaviourPunCallbacks
                 parentContent = redTeamContent;
             }
 
-            GameObject playerItem = Instantiate(playerListItemPrefab, parentContent);
-            playerItem.GetComponent<PlayerListItem>().SetUp(player); // We no longer set team here
+            // GameObject playerItem = Instantiate(playerListItemPrefab, parentContent);
+            // playerItem.GetComponent<PlayerListItem>().SetUp(player); // We no longer set team here
 
-            // --- IMPORTANT: Enable dragging only for the Master Client ---
+            // // --- IMPORTANT: Enable dragging only for the Master Client ---
+            // DraggablePlayer draggable = playerItem.GetComponent<DraggablePlayer>();
+            // draggable.playerInfo = player; // Give the draggable script the player's data
+            // draggable.SetDraggable(PhotonNetwork.IsMasterClient);
+            GameObject playerItem = Instantiate(playerListItemPrefab, parentContent);
+            playerItem.GetComponent<PlayerListItem>().SetUp(player);
+
             DraggablePlayer draggable = playerItem.GetComponent<DraggablePlayer>();
             draggable.playerInfo = player; // Give the draggable script the player's data
-            draggable.SetDraggable(PhotonNetwork.IsMasterClient);
         }
         
         // Update the Start Button visibility

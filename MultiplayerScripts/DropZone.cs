@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+using Photon.Pun;
+using Photon.Realtime;
 
 // Add this script to your Red Team and Blue Team panel objects
 public class DropZone : MonoBehaviour, IDropHandler
@@ -13,6 +15,8 @@ public class DropZone : MonoBehaviour, IDropHandler
         
         if (draggable != null)
         {
+            if (!PhotonNetwork.IsMasterClient) return;
+
             Debug.Log($"Dropped player {draggable.playerInfo.NickName} on Team {teamID}");
 
             // Set the parent of the dropped object to this drop zone's transform

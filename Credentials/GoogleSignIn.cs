@@ -458,6 +458,546 @@
 
 
 
+// using System;
+// using System.Collections;
+// using System.Collections.Generic;
+// using System.IO;
+// using System.Net;
+// using System.Text;
+// using System.Threading;
+// using System.Linq;
+// using UnityEngine;
+// using UnityEngine.Networking;
+// using Firebase;
+// using Firebase.Auth;
+// using Firebase.Firestore;
+// using Firebase.Extensions;
+
+// [System.Serializable]
+// public class TokenResponse
+// {
+//     public string access_token;
+//     public string id_token;
+//     public int expires_in;
+//     public string token_type;
+//     public string scope;
+//     public string refresh_token;
+// }
+
+// public class GoogleSignIn : MonoBehaviour
+// {
+//     [Header("Google OAuth Settings")]
+//     // public string clientId = "YOUR_CLIENT_ID.apps.googleusercontent.com";
+//     // public string clientSecret = "YOUR_CLIENT_SECRET";
+//     public string clientId = "473018706625-3e24bn66jk9id5n0ck06qjggj9dl0mhd.apps.googleusercontent.com"; 
+//     public string clientSecret = "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";
+//     public string redirectUri = "http://localhost:8080";
+
+//     [Header("UI")]
+//     public GameObject signInPanel;
+//     public GameObject displayNamePanel;
+//     public GameObject mainMenuPanel;
+
+//     [Header("Firebase")]
+//     public FirebaseAuth auth;
+
+//     private string authCode;
+//     private bool callbackReceived = false;
+//     private readonly object lockObject = new object();
+//     private bool firebaseInitialized = false;
+//     private FirebaseUser currentUser;
+
+//     void Start()
+//     {
+//         FirebaseApp.CheckAndFixDependenciesAsync().ContinueWithOnMainThread(task =>
+//         {
+//             if (task.IsFaulted)
+//             {
+//                 Debug.LogError($"Firebase init failed: {task.Exception}");
+//                 return;
+//             }
+
+//             DependencyStatus dependencyStatus = task.Result;
+//             if (dependencyStatus == DependencyStatus.Available)
+//             {
+//                 auth = FirebaseAuth.DefaultInstance;
+//                 firebaseInitialized = true;
+//                 Debug.Log("Firebase Auth initialized successfully!");
+//             }
+//             else
+//             {
+//                 Debug.LogError($"Firebase dependencies not resolved: {dependencyStatus}");
+//             }
+//         });
+//     }
+
+//     public void OnSignInButtonClick()
+//     {
+//         if (!firebaseInitialized)
+//         {
+//             Debug.LogError("Firebase not initialized yet. Please wait.");
+//             return;
+//         }
+//         StartCoroutine(SignInCoroutine());
+//     }
+
+//     private IEnumerator SignInCoroutine()
+//     {
+//         string authUrl = BuildAuthUrl();
+//         Debug.Log($"Opening browser for OAuth: {authUrl}");
+//         Application.OpenURL(authUrl);
+
+//         StartThreadForListener();
+
+//         float timeout = 120f;
+//         while (!callbackReceived && timeout > 0f)
+//         {
+//             timeout -= Time.deltaTime;
+//             yield return null;
+//         }
+
+//         if (callbackReceived && !string.IsNullOrEmpty(authCode))
+//         {
+//             yield return StartCoroutine(ExchangeCodeForToken(authCode));
+//             Debug.Log("Sign-in successful! Game screen enabled.");
+//         }
+//         else
+//         {
+//             Debug.LogError("Sign-in failed or timed out.");
+//         }
+//     }
+
+//     private string BuildAuthUrl()
+//     {
+//         string baseAuthUri = "https://accounts.google.com/o/oauth2/v2/auth";
+//         var authUriQueryParams = new Dictionary<string, string>
+//         {
+//             ["client_id"] = clientId,
+//             ["redirect_uri"] = redirectUri,
+//             ["response_type"] = "code",
+//             ["scope"] = "openid email profile",
+//             ["access_type"] = "offline",
+//             ["prompt"] = "select_account"
+//         };
+
+//         var queryString = string.Join("&", authUriQueryParams.Select(kvp => $"{kvp.Key}={Uri.EscapeDataString(kvp.Value)}"));
+//         return $"{baseAuthUri}?{queryString}";
+//     }
+
+//     private void StartThreadForListener()
+//     {
+//         authCode = null;
+//         callbackReceived = false;
+//         var thread = new Thread(ListenForCallback);
+//         thread.IsBackground = true;
+//         thread.Start();
+//     }
+
+//     private void ListenForCallback()
+//     {
+//         using (var listener = new HttpListener())
+//         {
+//             string prefix = redirectUri.EndsWith("/") ? redirectUri : redirectUri + "/";
+//             listener.Prefixes.Add(prefix);
+//             try
+//             {
+//                 listener.Start();
+//                 Debug.Log($"Listening for OAuth callback on {prefix}");
+//                 var context = listener.GetContext();
+//                 string code = context.Request.QueryString["code"];
+
+//                 lock (lockObject)
+//                 {
+//                     authCode = code;
+//                     callbackReceived = true;
+//                     Debug.Log($"Received auth code: {code}");
+//                 }
+
+//                 string responseString = @"
+//                     <html><body><h1>Login Successful!</h1><p>Close this tab.</p><script>window.close();</script></body></html>";
+//                 byte[] buffer = Encoding.UTF8.GetBytes(responseString);
+//                 context.Response.ContentLength64 = buffer.Length;
+//                 context.Response.ContentType = "text/html";
+//                 context.Response.OutputStream.Write(buffer, 0, buffer.Length);
+//                 context.Response.OutputStream.Close();
+//             }
+//             catch (Exception e)
+//             {
+//                 Debug.LogError($"Listener error: {e.Message}\n{e.StackTrace}");
+//                 lock (lockObject)
+//                 {
+//                     callbackReceived = true;
+//                 }
+//             }
+//             finally
+//             {
+//                 listener.Stop();
+//             }
+//         }
+//     }
+
+//     private IEnumerator ExchangeCodeForToken(string code)
+//     {
+//         string tokenUrl = "https://oauth2.googleapis.com/token";
+//         WWWForm form = new WWWForm();
+//         form.AddField("code", code);
+//         form.AddField("client_id", clientId);
+//         form.AddField("client_secret", clientSecret);
+//         form.AddField("redirect_uri", redirectUri);
+//         form.AddField("grant_type", "authorization_code");
+
+//         using (UnityWebRequest www = UnityWebRequest.Post(tokenUrl, form))
+//         {
+//             yield return www.SendWebRequest();
+
+//             if (www.result == UnityWebRequest.Result.Success)
+//             {
+//                 string jsonResponse = www.downloadHandler.text;
+//                 TokenResponse token = JsonUtility.FromJson<TokenResponse>(jsonResponse);
+
+//                 if (token != null && !string.IsNullOrEmpty(token.access_token) && !string.IsNullOrEmpty(token.id_token))
+//                 {
+//                     Debug.Log($"Access Token: {token.access_token.Substring(0, Math.Min(token.access_token.Length, 20))}...");
+//                     Debug.Log($"ID Token: {token.id_token.Substring(0, Math.Min(token.id_token.Length, 20))}...");
+//                     PlayerPrefs.SetString("GoogleAccessToken", token.access_token);
+//                     PlayerPrefs.SetString("GoogleIdToken", token.id_token);
+//                     if (!string.IsNullOrEmpty(token.refresh_token))
+//                     {
+//                         Debug.Log($"Refresh Token: {token.refresh_token.Substring(0, Math.Min(token.refresh_token.Length, 20))}...");
+//                         PlayerPrefs.SetString("GoogleRefreshToken", token.refresh_token);
+//                     }
+//                     PlayerPrefs.Save();
+
+//                     string tokenInfoUrl = $"https://www.googleapis.com/oauth2/v3/tokeninfo?id_token={token.id_token}";
+//                     using (UnityWebRequest tokenCheck = UnityWebRequest.Get(tokenInfoUrl))
+//                     {
+//                         yield return tokenCheck.SendWebRequest();
+//                         if (tokenCheck.result == UnityWebRequest.Result.Success)
+//                         {
+//                             Debug.Log($"Token info: {tokenCheck.downloadHandler.text}");
+//                         }
+//                         else
+//                         {
+//                             Debug.LogError($"Token validation failed: {tokenCheck.error}");
+//                             yield break;
+//                         }
+//                     }
+
+//                     yield return StartCoroutine(SignInToFirebase(token.id_token, token.access_token));
+//                 }
+//                 else
+//                 {
+//                     Debug.LogError($"Token response issue: access_token={(token?.access_token ?? "null")}, id_token={(token?.id_token ?? "null")}");
+//                 }
+//             }
+//             else
+//             {
+//                 Debug.LogError($"Token exchange failed: {www.error} - {www.downloadHandler.text}");
+//             }
+//         }
+//     }
+
+//     private IEnumerator SignInToFirebase(string idToken, string accessToken)
+//     {
+//         Debug.Log($"Attempting Firebase sign-in with id_token: {idToken.Substring(0, Math.Min(idToken.Length, 20))}...");
+//         Credential credential;
+//         try
+//         {
+//             credential = GoogleAuthProvider.GetCredential(idToken, accessToken);
+//         }
+//         catch (Exception ex)
+//         {
+//             Debug.LogError($"Failed to create Google credential: {ex.Message}\n{ex.StackTrace}");
+//             yield break;
+//         }
+
+//         var signInTask = auth.SignInAndRetrieveDataWithCredentialAsync(credential);
+//         yield return new WaitUntil(() => signInTask.IsCompleted);
+
+//         if (signInTask.IsCanceled)
+//         {
+//             Debug.LogError("Firebase SignIn was canceled.");
+//             yield break;
+//         }
+//         if (signInTask.IsFaulted)
+//         {
+//             Debug.LogError($"Firebase SignIn failed: {signInTask.Exception}");
+//             foreach (var innerException in signInTask.Exception.InnerExceptions)
+//             {
+//                 Debug.LogError($"Inner exception: {innerException.Message}\n{innerException.StackTrace}");
+//             }
+//             yield break;
+//         }
+
+//         AuthResult authResult = signInTask.Result;
+//         currentUser = authResult.User;
+//         Debug.Log($"Firebase User signed in: {currentUser.DisplayName} ({currentUser.Email}) (UID: {currentUser.UserId})");
+
+//         // Check Firestore for displayName to determine first-time user
+//         FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
+//         DocumentReference docRef = db.Collection("users").Document(currentUser.Email);
+//         var getTask = docRef.GetSnapshotAsync();
+//         yield return new WaitUntil(() => getTask.IsCompleted);
+
+//         bool isFirstTimeUser = true;
+//         if (getTask.IsFaulted)
+//         {
+//             Debug.LogError($"Failed to check user document: {getTask.Exception}");
+//         }
+//         else
+//         {
+//             DocumentSnapshot snapshot = getTask.Result;
+//             if (snapshot.Exists && snapshot.ContainsField("displayName"))
+//             {
+//                 isFirstTimeUser = false;
+//                 string displayName = snapshot.GetValue<string>("displayName");
+//                 Debug.Log($"Existing user with display name: {displayName}");
+//                 // Store displayName for use in game (e.g., GameManager)
+//                 // Example: GameManager.Instance.PlayerDisplayName = displayName;
+//             }
+//         }
+
+//         if (isFirstTimeUser)
+//         {
+//             Debug.Log("First-time user detected. Enabling display name screen.");
+//             if (displayNamePanel != null)
+//             {
+//                 signInPanel.SetActive(false);
+//                 displayNamePanel.SetActive(true);
+//             }
+//         }
+//         else
+//         {
+//             Debug.Log("Existing user detected. Going to main menu.");
+//             GoToMainMenu();
+//         }
+//     }
+
+//     private void GoToMainMenu()
+//     {
+//         if (mainMenuPanel != null)
+//         {
+//             signInPanel.SetActive(false);
+//             mainMenuPanel.SetActive(true);
+//         }
+//         Debug.Log("Proceeding to main menu.");
+//     }
+// }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -487,8 +1027,8 @@ public class TokenResponse
 public class GoogleSignIn : MonoBehaviour
 {
     [Header("Google OAuth Settings")]
-    public string clientId = "YOUR_CLIENT_ID.apps.googleusercontent.com";
-    public string clientSecret = "YOUR_CLIENT_SECRET";
+    public string clientId = "473018706625-3e24bn66jk9id5n0ck06qjggj9dl0mhd.apps.googleusercontent.com";
+    public string clientSecret = "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";
     public string redirectUri = "http://localhost:8080";
 
     [Header("UI")]
@@ -505,13 +1045,23 @@ public class GoogleSignIn : MonoBehaviour
     private bool firebaseInitialized = false;
     private FirebaseUser currentUser;
 
+    // PlayerPrefs keys for session persistence
+    private const string RefreshTokenKey = "GoogleRefreshToken";
+    private const string LastLoginTimeKey = "LastLoginTime";
+
     void Start()
     {
+        // Initially, hide all panels until we know the user's state
+        signInPanel.SetActive(false);
+        displayNamePanel.SetActive(false);
+        mainMenuPanel.SetActive(false);
+
         FirebaseApp.CheckAndFixDependenciesAsync().ContinueWithOnMainThread(task =>
         {
             if (task.IsFaulted)
             {
                 Debug.LogError($"Firebase init failed: {task.Exception}");
+                signInPanel.SetActive(true); // Show sign-in on failure
                 return;
             }
 
@@ -521,12 +1071,52 @@ public class GoogleSignIn : MonoBehaviour
                 auth = FirebaseAuth.DefaultInstance;
                 firebaseInitialized = true;
                 Debug.Log("Firebase Auth initialized successfully!");
+
+                // Attempt to sign in silently with a refresh token
+                AttemptSilentLogin();
             }
             else
             {
                 Debug.LogError($"Firebase dependencies not resolved: {dependencyStatus}");
+                signInPanel.SetActive(true); // Show sign-in on failure
             }
         });
+    }
+
+    private void AttemptSilentLogin()
+    {
+        string refreshToken = PlayerPrefs.GetString(RefreshTokenKey, null);
+        string lastLoginString = PlayerPrefs.GetString(LastLoginTimeKey, null);
+
+        if (string.IsNullOrEmpty(refreshToken) || string.IsNullOrEmpty(lastLoginString))
+        {
+            Debug.Log("No refresh token found. User needs to sign in manually.");
+            signInPanel.SetActive(true);
+            return;
+        }
+
+        try
+        {
+            long lastLoginTicks = long.Parse(lastLoginString);
+            DateTime lastLoginTime = new DateTime(lastLoginTicks);
+
+            if ((DateTime.UtcNow - lastLoginTime).TotalDays > 30)
+            {
+                Debug.Log("Session expired (older than 30 days). User needs to sign in manually.");
+                ClearSessionData();
+                signInPanel.SetActive(true);
+                return;
+            }
+
+            Debug.Log("Found valid refresh token. Attempting silent login.");
+            StartCoroutine(RefreshTokenFlow(refreshToken));
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Error parsing last login time: {ex.Message}. Clearing data and requiring manual login.");
+            ClearSessionData();
+            signInPanel.SetActive(true);
+        }
     }
 
     public void OnSignInButtonClick()
@@ -536,10 +1126,10 @@ public class GoogleSignIn : MonoBehaviour
             Debug.LogError("Firebase not initialized yet. Please wait.");
             return;
         }
-        StartCoroutine(SignInCoroutine());
+        StartCoroutine(ManualSignInFlow());
     }
 
-    private IEnumerator SignInCoroutine()
+    private IEnumerator ManualSignInFlow()
     {
         string authUrl = BuildAuthUrl();
         Debug.Log($"Opening browser for OAuth: {authUrl}");
@@ -557,11 +1147,11 @@ public class GoogleSignIn : MonoBehaviour
         if (callbackReceived && !string.IsNullOrEmpty(authCode))
         {
             yield return StartCoroutine(ExchangeCodeForToken(authCode));
-            Debug.Log("Sign-in successful! Game screen enabled.");
         }
         else
         {
             Debug.LogError("Sign-in failed or timed out.");
+            signInPanel.SetActive(true); // Show sign-in panel on failure
         }
     }
 
@@ -574,7 +1164,7 @@ public class GoogleSignIn : MonoBehaviour
             ["redirect_uri"] = redirectUri,
             ["response_type"] = "code",
             ["scope"] = "openid email profile",
-            ["access_type"] = "offline",
+            ["access_type"] = "offline", // IMPORTANT: This is required to get a refresh_token
             ["prompt"] = "select_account"
         };
 
@@ -612,7 +1202,7 @@ public class GoogleSignIn : MonoBehaviour
                 }
 
                 string responseString = @"
-                    <html><body><h1>Login Successful!</h1><p>Close this tab.</p><script>window.close();</script></body></html>";
+                    <html><body><h1>Login Successful!</h1><p>You can close this tab and return to the game.</p><script>window.close();</script></body></html>";
                 byte[] buffer = Encoding.UTF8.GetBytes(responseString);
                 context.Response.ContentLength64 = buffer.Length;
                 context.Response.ContentType = "text/html";
@@ -624,7 +1214,7 @@ public class GoogleSignIn : MonoBehaviour
                 Debug.LogError($"Listener error: {e.Message}\n{e.StackTrace}");
                 lock (lockObject)
                 {
-                    callbackReceived = true;
+                    callbackReceived = true; // Still set to true to stop the wait coroutine
                 }
             }
             finally
@@ -653,85 +1243,89 @@ public class GoogleSignIn : MonoBehaviour
                 string jsonResponse = www.downloadHandler.text;
                 TokenResponse token = JsonUtility.FromJson<TokenResponse>(jsonResponse);
 
-                if (token != null && !string.IsNullOrEmpty(token.access_token) && !string.IsNullOrEmpty(token.id_token))
+                if (token != null && !string.IsNullOrEmpty(token.id_token))
                 {
-                    Debug.Log($"Access Token: {token.access_token.Substring(0, Math.Min(token.access_token.Length, 20))}...");
-                    Debug.Log($"ID Token: {token.id_token.Substring(0, Math.Min(token.id_token.Length, 20))}...");
-                    PlayerPrefs.SetString("GoogleAccessToken", token.access_token);
-                    PlayerPrefs.SetString("GoogleIdToken", token.id_token);
-                    if (!string.IsNullOrEmpty(token.refresh_token))
-                    {
-                        Debug.Log($"Refresh Token: {token.refresh_token.Substring(0, Math.Min(token.refresh_token.Length, 20))}...");
-                        PlayerPrefs.SetString("GoogleRefreshToken", token.refresh_token);
-                    }
-                    PlayerPrefs.Save();
-
-                    string tokenInfoUrl = $"https://www.googleapis.com/oauth2/v3/tokeninfo?id_token={token.id_token}";
-                    using (UnityWebRequest tokenCheck = UnityWebRequest.Get(tokenInfoUrl))
-                    {
-                        yield return tokenCheck.SendWebRequest();
-                        if (tokenCheck.result == UnityWebRequest.Result.Success)
-                        {
-                            Debug.Log($"Token info: {tokenCheck.downloadHandler.text}");
-                        }
-                        else
-                        {
-                            Debug.LogError($"Token validation failed: {tokenCheck.error}");
-                            yield break;
-                        }
-                    }
-
+                    Debug.Log("Successfully exchanged code for tokens.");
+                    SaveSessionData(token);
                     yield return StartCoroutine(SignInToFirebase(token.id_token, token.access_token));
                 }
                 else
                 {
-                    Debug.LogError($"Token response issue: access_token={(token?.access_token ?? "null")}, id_token={(token?.id_token ?? "null")}");
+                    Debug.LogError($"Token response issue: {jsonResponse}");
+                    signInPanel.SetActive(true);
                 }
             }
             else
             {
                 Debug.LogError($"Token exchange failed: {www.error} - {www.downloadHandler.text}");
+                signInPanel.SetActive(true);
+            }
+        }
+    }
+
+    private IEnumerator RefreshTokenFlow(string refreshToken)
+    {
+        string tokenUrl = "https://oauth2.googleapis.com/token";
+        WWWForm form = new WWWForm();
+        form.AddField("client_id", clientId);
+        form.AddField("client_secret", clientSecret);
+        form.AddField("refresh_token", refreshToken);
+        form.AddField("grant_type", "refresh_token");
+
+        using (UnityWebRequest www = UnityWebRequest.Post(tokenUrl, form))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result == UnityWebRequest.Result.Success)
+            {
+                string jsonResponse = www.downloadHandler.text;
+                TokenResponse token = JsonUtility.FromJson<TokenResponse>(jsonResponse);
+
+                if (token != null && !string.IsNullOrEmpty(token.id_token))
+                {
+                    Debug.Log("Successfully refreshed tokens.");
+                    // The refresh token itself doesn't change, so we pass the original one
+                    token.refresh_token = refreshToken;
+                    SaveSessionData(token);
+                    yield return StartCoroutine(SignInToFirebase(token.id_token, token.access_token));
+                }
+                else
+                {
+                    Debug.LogError($"Refresh token response issue: {jsonResponse}. Requiring manual login.");
+                    ClearSessionData();
+                    signInPanel.SetActive(true);
+                }
+            }
+            else
+            {
+                Debug.LogError($"Token refresh failed: {www.error} - {www.downloadHandler.text}. This may happen if the token was revoked. Requiring manual login.");
+                ClearSessionData();
+                signInPanel.SetActive(true);
             }
         }
     }
 
     private IEnumerator SignInToFirebase(string idToken, string accessToken)
     {
-        Debug.Log($"Attempting Firebase sign-in with id_token: {idToken.Substring(0, Math.Min(idToken.Length, 20))}...");
-        Credential credential;
-        try
-        {
-            credential = GoogleAuthProvider.GetCredential(idToken, accessToken);
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"Failed to create Google credential: {ex.Message}\n{ex.StackTrace}");
-            yield break;
-        }
+        Debug.Log("Attempting Firebase sign-in...");
+        Credential credential = GoogleAuthProvider.GetCredential(idToken, accessToken);
 
         var signInTask = auth.SignInAndRetrieveDataWithCredentialAsync(credential);
         yield return new WaitUntil(() => signInTask.IsCompleted);
 
-        if (signInTask.IsCanceled)
-        {
-            Debug.LogError("Firebase SignIn was canceled.");
-            yield break;
-        }
         if (signInTask.IsFaulted)
         {
             Debug.LogError($"Firebase SignIn failed: {signInTask.Exception}");
-            foreach (var innerException in signInTask.Exception.InnerExceptions)
-            {
-                Debug.LogError($"Inner exception: {innerException.Message}\n{innerException.StackTrace}");
-            }
+            ClearSessionData();
+            signInPanel.SetActive(true);
             yield break;
         }
 
         AuthResult authResult = signInTask.Result;
         currentUser = authResult.User;
-        Debug.Log($"Firebase User signed in: {currentUser.DisplayName} ({currentUser.Email}) (UID: {currentUser.UserId})");
+        Debug.Log($"Firebase User signed in: {currentUser.DisplayName} (UID: {currentUser.UserId})");
 
-        // Check Firestore for displayName to determine first-time user
+        // Check Firestore for displayName to determine first-time user vs existing user
         FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
         DocumentReference docRef = db.Collection("users").Document(currentUser.Email);
         var getTask = docRef.GetSnapshotAsync();
@@ -741,6 +1335,7 @@ public class GoogleSignIn : MonoBehaviour
         if (getTask.IsFaulted)
         {
             Debug.LogError($"Failed to check user document: {getTask.Exception}");
+            // Proceed as if first-time user to allow them to set a name
         }
         else
         {
@@ -750,19 +1345,15 @@ public class GoogleSignIn : MonoBehaviour
                 isFirstTimeUser = false;
                 string displayName = snapshot.GetValue<string>("displayName");
                 Debug.Log($"Existing user with display name: {displayName}");
-                // Store displayName for use in game (e.g., GameManager)
-                // Example: GameManager.Instance.PlayerDisplayName = displayName;
             }
         }
 
         if (isFirstTimeUser)
         {
             Debug.Log("First-time user detected. Enabling display name screen.");
-            if (displayNamePanel != null)
-            {
-                signInPanel.SetActive(false);
-                displayNamePanel.SetActive(true);
-            }
+            signInPanel.SetActive(false);
+            displayNamePanel.SetActive(true);
+            mainMenuPanel.SetActive(false);
         }
         else
         {
@@ -771,13 +1362,49 @@ public class GoogleSignIn : MonoBehaviour
         }
     }
 
+    private void SaveSessionData(TokenResponse token)
+    {
+        Debug.Log("Saving session data.");
+        // Only update the refresh token if a new one is provided (usually only on first login)
+        if (!string.IsNullOrEmpty(token.refresh_token))
+        {
+            PlayerPrefs.SetString(RefreshTokenKey, token.refresh_token);
+        }
+        PlayerPrefs.SetString(LastLoginTimeKey, DateTime.UtcNow.Ticks.ToString());
+        PlayerPrefs.Save();
+    }
+
+    private void ClearSessionData()
+    {
+        Debug.Log("Clearing all session data.");
+        PlayerPrefs.DeleteKey(RefreshTokenKey);
+        PlayerPrefs.DeleteKey(LastLoginTimeKey);
+        // Also clear legacy keys just in case
+        PlayerPrefs.DeleteKey("GoogleAccessToken");
+        PlayerPrefs.DeleteKey("GoogleIdToken");
+        PlayerPrefs.Save();
+    }
+
+    public void SignOut()
+    {
+        if (auth.CurrentUser != null)
+        {
+            auth.SignOut();
+            Debug.Log("Firebase user signed out.");
+        }
+        ClearSessionData();
+        // Show the sign-in screen after signing out
+        signInPanel.SetActive(true);
+        displayNamePanel.SetActive(false);
+        mainMenuPanel.SetActive(false);
+    }
+
+
     private void GoToMainMenu()
     {
-        if (mainMenuPanel != null)
-        {
-            signInPanel.SetActive(false);
-            mainMenuPanel.SetActive(true);
-        }
+        signInPanel.SetActive(false);
+        displayNamePanel.SetActive(false);
+        mainMenuPanel.SetActive(true);
         Debug.Log("Proceeding to main menu.");
     }
 }
